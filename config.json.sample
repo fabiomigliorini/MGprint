@@ -1,7 +1,7 @@
 {
     "ably": {
       "key": "{{ably key}}",
-      "channel": "impressao"
+      "channel": "printing"
     },
     "printers": [
       "deposito-escritorio-hp-laser",
