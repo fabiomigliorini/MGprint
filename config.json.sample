@@ -1,0 +1,10 @@
+{
+    "ably": {
+      "key": "{{ably key}}",
+      "channel": "impressao"
+    },
+    "printers": [
+      "deposito-escritorio-hp-laser",
+      "deposito-escritorio-epson-jato-tinta-fabio"
+    ]
+}
