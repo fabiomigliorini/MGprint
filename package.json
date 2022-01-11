@@ -1,0 +1,22 @@
+{
+  "name": "mgprint",
+  "version": "0.0.1",
+  "description": "Servidor Impressao MG Papelaria",
+  "main": "./bin/index.js",
+  "bin": {
+    "server": "./bin/index.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Fabio Migliorini",
+  "license": "ISC",
+  "dependencies": {
+    "ably": "^1.2.15",
+    "axios": "^0.21.1",
+    "boxen": "^4.0.0",
+    "chalk": "^2.4.2",
+    "conf": "^10.1.1",
+    "yargs": "^13.2.4"
+  }
+}
