@@ -42,4 +42,5 @@ Reiniciar Supervisor
 ```
 sudo service supervisor stop
 sudo service supervisor start
+sudo tail -f /var/log/supervisor/MGprint.log 
 ```
