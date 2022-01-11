@@ -4,28 +4,46 @@ const { exec } = require("child_process");
 const fs = require('fs');
 const axios = require("axios");
 
+const chalk = require("chalk");
+const boxen = require("boxen");
+
+let greeting = chalk.white.bold("MGprint - Servidor de Impressao MG Papelaria!");
+
+const boxenOptions = {
+ padding: 1,
+ margin: 0,
+ borderStyle: "round",
+ borderColor: "green",
+ backgroundColor: "#555555"
+};
+const msgBox = boxen( greeting, boxenOptions );
+console.log(msgBox);
+
 // importa arquivo de configuracao (config.json)
-let rawdata = fs.readFileSync('config.json');
-let config = JSON.parse(rawdata);
+var rawdata = fs.readFileSync('config.json');
+var config = JSON.parse(rawdata);
 
 // conecta no servidor ably
 var ably = new require('ably').Realtime(config.ably.key);
 var channel = ably.channels.get(config.ably.channel);
 
+
 // para cada printer do config.json
 config.printers.forEach(function(printer) {
 
   // loga o Nome da printer
-  console.log(printer);
+  let greeting = chalk.white.bold("Escutando eventos da impressora '" + printer + "'!");
+  console.log(greeting);
+  // const msgBox = boxen( greeting, boxenOptions );
+  // console.log(msgBox);
+  // console.log(printer);
 
   // Subscreve com o nome de cada printer, como nome de um evento
   channel.subscribe(printer, function(message) {
 
-    console.log(printer);
-    console.log(message.data);
-
     // interpreta o json recebido
     var data = JSON.parse(message.data);
+    console.log(printer);
     console.log(data);
 
     // faz o download da url com o pdf pra imprimir
@@ -58,25 +76,7 @@ config.printers.forEach(function(printer) {
 });
 
 
-// console.log(config.printers[1]);
-
-
 /*
-const chalk = require("chalk");
-const boxen = require("boxen");
-
-var greeting = chalk.white.bold("Hello!");
-
-const boxenOptions = {
- padding: 1,
- margin: 1,
- borderStyle: "round",
- borderColor: "green",
- backgroundColor: "#555555"
-};
-const msgBox = boxen( greeting, boxenOptions );
-
-console.log(msgBox);
 
 const yargs = require("yargs");
 
