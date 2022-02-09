@@ -52,7 +52,7 @@ config.printers.forEach(function(printer) {
         // salva arquivo no /tmp/
         let file = "/tmp/MGprint-" + new Date().toISOString() + ".pdf";
         console.log(file);
-        response.data.pipe(fs.createWriteStream(file));
+        let pipe = response.data.pipe(fs.createWriteStream(file));
 
         // monta o comando de impressao
         var command = "lp -d " + printer + " " + file;
@@ -67,7 +67,9 @@ config.printers.forEach(function(printer) {
         console.log(command);
 
         // executa
-        exec(command);
+        pipe.on('finish', () => {
+          exec(command);
+        });
 
       }).catch(error => {
         console.log(error);
