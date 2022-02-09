@@ -47,9 +47,9 @@ sudo tail -f /var/log/supervisor/MGprint.log
 
 Atualizar
 ```
-sudo service supervisor stop
 cd /opt/MGprint
 git pull
+sudo service supervisor stop
 sudo service supervisor start
 sudo tail -f /var/log/supervisor/MGprint.log
 ```
