@@ -106,52 +106,65 @@ if [ "${#LOCAL_PRINTERS[@]}" -eq 0 ]; then
     exit 1
   fi
 else
-  echo "Impressoras instaladas no CUPS deste computador:"
-  for i in "${!LOCAL_PRINTERS[@]}"; do
-    n=$((i+1))
-    p="${LOCAL_PRINTERS[$i]}"
-    if echo "$CURRENT_PRINTERS_JSON" | jq -e --arg p "$p" 'index($p) != null' > /dev/null 2>&1; then
-      mark="x"
-    else
-      mark=" "
-    fi
-    printf "  %2d) [%s] %s\n" "$n" "$mark" "$p"
-  done
-  echo ""
-  echo "Digite os numeros das impressoras a incluir (separados por espaco),"
-  if [ "$HAS_PRINTERS" = "1" ]; then
-    echo "ou enter direto para manter a selecao atual (marcadas com x):"
-  else
-    echo "ou 'all' para todas:"
-  fi
-  printf "Selecao: "
-  read -r SELECTION < /dev/tty
-
-  if [ -z "$SELECTION" ]; then
-    if [ "$HAS_PRINTERS" = "1" ]; then
-      echo ">> mantendo impressoras atuais"
-      PRINTERS_ARRAY="$CURRENT_PRINTERS_JSON"
-    else
-      echo "ERRO: nenhuma impressora selecionada." >&2
-      exit 1
-    fi
-  elif [ "$SELECTION" = "all" ] || [ "$SELECTION" = "ALL" ]; then
-    PRINTERS_ARRAY=$(printf '%s\n' "${LOCAL_PRINTERS[@]}" | jq -R . | jq -s .)
-  else
-    PICKED=()
-    for n in $SELECTION; do
-      if ! [[ "$n" =~ ^[0-9]+$ ]] || [ "$n" -lt 1 ] || [ "$n" -gt "${#LOCAL_PRINTERS[@]}" ]; then
-        echo "ERRO: numero invalido '$n' (use entre 1 e ${#LOCAL_PRINTERS[@]})." >&2
-        exit 1
+  while true; do
+    echo ""
+    echo "Impressoras instaladas no CUPS deste computador:"
+    for i in "${!LOCAL_PRINTERS[@]}"; do
+      n=$((i+1))
+      p="${LOCAL_PRINTERS[$i]}"
+      if echo "$CURRENT_PRINTERS_JSON" | jq -e --arg p "$p" 'index($p) != null' > /dev/null 2>&1; then
+        mark="x"
+      else
+        mark=" "
       fi
-      PICKED+=("${LOCAL_PRINTERS[$((n-1))]}")
+      printf "  %2d) [%s] %s\n" "$n" "$mark" "$p"
     done
-    PRINTERS_ARRAY=$(printf '%s\n' "${PICKED[@]}" | jq -R . | jq -s .)
-  fi
+    echo ""
+    echo "Digite os numeros das impressoras a incluir (separados por espaco),"
+    if [ "$HAS_PRINTERS" = "1" ]; then
+      echo "'all' para todas, ou enter direto para manter selecao atual (marcadas com x):"
+    else
+      echo "ou 'all' para todas:"
+    fi
+    printf "Selecao: "
+    read -r SELECTION < /dev/tty
 
-  echo ""
-  echo "Impressoras selecionadas:"
-  echo "$PRINTERS_ARRAY" | jq -r '.[]' | sed 's/^/  - /'
+    if [ -z "$SELECTION" ]; then
+      if [ "$HAS_PRINTERS" = "1" ]; then
+        PRINTERS_ARRAY="$CURRENT_PRINTERS_JSON"
+      else
+        echo "ERRO: nenhuma impressora selecionada."
+        continue
+      fi
+    elif [ "$SELECTION" = "all" ] || [ "$SELECTION" = "ALL" ]; then
+      PRINTERS_ARRAY=$(printf '%s\n' "${LOCAL_PRINTERS[@]}" | jq -R . | jq -s .)
+    else
+      PICKED=()
+      INVALID=0
+      for n in $SELECTION; do
+        if ! [[ "$n" =~ ^[0-9]+$ ]] || [ "$n" -lt 1 ] || [ "$n" -gt "${#LOCAL_PRINTERS[@]}" ]; then
+          echo "ERRO: numero invalido '$n' (use entre 1 e ${#LOCAL_PRINTERS[@]})."
+          INVALID=1
+          break
+        fi
+        PICKED+=("${LOCAL_PRINTERS[$((n-1))]}")
+      done
+      [ "$INVALID" = "1" ] && continue
+      PRINTERS_ARRAY=$(printf '%s\n' "${PICKED[@]}" | jq -R . | jq -s .)
+    fi
+
+    echo ""
+    echo "Impressoras selecionadas:"
+    echo "$PRINTERS_ARRAY" | jq -r '.[]' | sed 's/^/  - /'
+    echo ""
+    printf "Confirma? [enter = sim / a = alterar]: "
+    read -r CONFIRM < /dev/tty
+    case "$CONFIRM" in
+      ""|s|S|y|Y) break ;;
+      a|A) continue ;;
+      *) echo "Resposta invalida, voltando pra selecao."; continue ;;
+    esac
+  done
 fi
 
 jq -n --arg key "$ABLY_KEY" --argjson printers "$PRINTERS_ARRAY" '{
