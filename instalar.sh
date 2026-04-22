@@ -57,30 +57,61 @@ echo ">> npm install"
 npm install
 
 # ----- config.json -----
-if [ -f "$PROJECT_DIR/config.json" ]; then
-  echo ">> config.json ja existe, preservando (edite manualmente se precisar)"
-else
-  echo ""
-  echo ">> configurando config.json"
+echo ""
+echo ">> configurando config.json (enter mantem o valor atual)"
 
+CURRENT_KEY=""
+CURRENT_PRINTERS_JSON="[]"
+if [ -f "$PROJECT_DIR/config.json" ]; then
+  CURRENT_KEY=$(jq -r '.ably.key // ""' "$PROJECT_DIR/config.json")
+  CURRENT_PRINTERS_JSON=$(jq -c '.printers // []' "$PROJECT_DIR/config.json")
+fi
+
+# chave do Ably
+echo ""
+if [ -n "$CURRENT_KEY" ]; then
+  echo "Chave do Ably atual: $CURRENT_KEY"
+  printf "Nova chave (enter para manter): "
+else
   printf "Chave do Ably: "
-  read -r ABLY_KEY < /dev/tty
-  if [ -z "$ABLY_KEY" ]; then
-    echo "ERRO: chave do Ably e obrigatoria." >&2
+fi
+read -r ABLY_KEY < /dev/tty
+ABLY_KEY=${ABLY_KEY:-$CURRENT_KEY}
+if [ -z "$ABLY_KEY" ]; then
+  echo "ERRO: chave do Ably e obrigatoria." >&2
+  exit 1
+fi
+
+# impressoras
+echo ""
+HAS_PRINTERS=0
+if [ "$CURRENT_PRINTERS_JSON" != "[]" ] && [ "$CURRENT_PRINTERS_JSON" != "null" ]; then
+  HAS_PRINTERS=1
+  echo "Impressoras atuais:"
+  echo "$CURRENT_PRINTERS_JSON" | jq -r '.[]' | sed 's/^/  - /'
+  echo ""
+  echo "Cole o conteudo do printers.json do servidor para redetectar,"
+  echo "ou Ctrl+D direto para manter as atuais:"
+else
+  echo "Cole o conteudo do printers.json do servidor (Ctrl+D para terminar):"
+fi
+echo "(no servidor: cat /opt/www/MGspa/laravel/printers.json)"
+PRINTERS_JSON_RAW=$(cat < /dev/tty)
+
+if [ -z "$(echo "$PRINTERS_JSON_RAW" | tr -d '[:space:]')" ]; then
+  if [ "$HAS_PRINTERS" = "1" ]; then
+    echo ">> mantendo impressoras atuais"
+    PRINTERS_ARRAY="$CURRENT_PRINTERS_JSON"
+  else
+    echo "ERRO: nenhuma impressora informada." >&2
     exit 1
   fi
-
-  echo ""
-  echo "Cole o conteudo do printers.json do servidor e pressione Ctrl+D:"
-  echo "(no servidor: cat /opt/www/MGspa/laravel/printers.json)"
-  PRINTERS_JSON_RAW=$(cat < /dev/tty)
-
+else
   if ! echo "$PRINTERS_JSON_RAW" | jq empty 2>/dev/null; then
     echo "ERRO: printers.json invalido (nao eh JSON)." >&2
     exit 1
   fi
 
-  # hostname -> tenta casar impressoras cujo nome contenha o hostname
   HOST=$(hostname -s)
   HOST_STRIP=$(echo "$HOST" | sed 's/-ub$//')
   echo ""
@@ -109,13 +140,14 @@ else
   fi
 
   PRINTERS_ARRAY=$(echo "$SELECTED" | jq -R . | jq -s .)
-  jq -n --arg key "$ABLY_KEY" --argjson printers "$PRINTERS_ARRAY" '{
-    ably: { key: $key, channel: "printing" },
-    printers: $printers
-  }' > "$PROJECT_DIR/config.json"
-
-  echo ">> config.json gerado em $PROJECT_DIR/config.json"
 fi
+
+jq -n --arg key "$ABLY_KEY" --argjson printers "$PRINTERS_ARRAY" '{
+  ably: { key: $key, channel: "printing" },
+  printers: $printers
+}' > "$PROJECT_DIR/config.json"
+
+echo ">> config.json atualizado em $PROJECT_DIR/config.json"
 
 # ----- supervisor -----
 echo ">> escrevendo $SUPERVISOR_CONF"
