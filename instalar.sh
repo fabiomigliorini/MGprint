@@ -87,80 +87,72 @@ echo ""
 HAS_PRINTERS=0
 if [ "$CURRENT_PRINTERS_JSON" != "[]" ] && [ "$CURRENT_PRINTERS_JSON" != "null" ]; then
   HAS_PRINTERS=1
-  echo "Impressoras atuais:"
-  echo "$CURRENT_PRINTERS_JSON" | jq -r '.[]' | sed 's/^/  - /'
-  echo ""
-  echo "Alterar impressoras?"
-  echo "  [enter] = manter atuais"
-  echo "  j = colar printers.json do servidor e auto-detectar pelo hostname"
-  echo "  m = digitar nomes manualmente"
-  printf "Opcao: "
-  DEFAULT_OPT=""
-else
-  echo "Configurar impressoras:"
-  echo "  j = colar printers.json do servidor e auto-detectar pelo hostname (padrao)"
-  echo "  m = digitar nomes manualmente"
-  printf "Opcao [j]: "
-  DEFAULT_OPT="j"
 fi
-read -r OPT < /dev/tty
-OPT=${OPT:-$DEFAULT_OPT}
 
-case "$OPT" in
-  "")
-    echo ">> mantendo impressoras atuais"
+if ! command -v lpstat > /dev/null; then
+  echo "ERRO: lpstat nao encontrado. Instale o CUPS antes: sudo apt install cups cups-client" >&2
+  exit 1
+fi
+
+mapfile -t LOCAL_PRINTERS < <(lpstat -a 2>/dev/null | awk '{print $1}' | sort -u)
+
+if [ "${#LOCAL_PRINTERS[@]}" -eq 0 ]; then
+  echo "AVISO: nenhuma impressora instalada no CUPS deste computador."
+  if [ "$HAS_PRINTERS" = "1" ]; then
+    echo ">> mantendo impressoras atuais do config.json"
     PRINTERS_ARRAY="$CURRENT_PRINTERS_JSON"
-    ;;
-  j|J)
-    echo ""
-    echo "Cole o conteudo completo do printers.json e pressione Ctrl+D:"
-    echo "(no servidor: cat /opt/www/MGspa/laravel/printers.json)"
-    PRINTERS_JSON_RAW=$(cat < /dev/tty)
-
-    if ! echo "$PRINTERS_JSON_RAW" | jq empty 2>/dev/null; then
-      echo "ERRO: printers.json invalido (nao eh JSON)." >&2
-      exit 1
-    fi
-
-    HOST=$(hostname -s)
-    HOST_STRIP=$(echo "$HOST" | sed 's/-ub$//')
-    echo ""
-    echo ">> hostname: $HOST  (procurando impressoras com '$HOST_STRIP')"
-
-    SELECTED=$(echo "$PRINTERS_JSON_RAW" | jq -r --arg h "$HOST_STRIP" '
-      keys[] | select(contains($h))
-    ')
-
-    if [ -z "$SELECTED" ]; then
-      echo "ERRO: nenhuma impressora no printers.json bate com '$HOST_STRIP'." >&2
-      echo "       re-rode o script e escolha 'm' para digitar manualmente." >&2
-      exit 1
-    fi
-
-    echo "Impressoras detectadas:"
-    echo "$SELECTED" | sed 's/^/  - /'
-    PRINTERS_ARRAY=$(echo "$SELECTED" | jq -R . | jq -s .)
-    ;;
-  m|M)
-    echo ""
-    echo "Digite os nomes das impressoras, um por linha."
-    echo "Termine com linha vazia (enter sem digitar nada):"
-    PRINTERS_ARR=()
-    while IFS= read -r line < /dev/tty; do
-      [ -z "$line" ] && break
-      PRINTERS_ARR+=("$line")
-    done
-    if [ "${#PRINTERS_ARR[@]}" -eq 0 ]; then
-      echo "ERRO: nenhuma impressora informada." >&2
-      exit 1
-    fi
-    PRINTERS_ARRAY=$(printf '%s\n' "${PRINTERS_ARR[@]}" | jq -R . | jq -s .)
-    ;;
-  *)
-    echo "ERRO: opcao invalida '$OPT' (use j, m ou enter)." >&2
+  else
+    echo "ERRO: configure ao menos uma impressora no CUPS e rode o script novamente." >&2
     exit 1
-    ;;
-esac
+  fi
+else
+  echo "Impressoras instaladas no CUPS deste computador:"
+  for i in "${!LOCAL_PRINTERS[@]}"; do
+    n=$((i+1))
+    p="${LOCAL_PRINTERS[$i]}"
+    if echo "$CURRENT_PRINTERS_JSON" | jq -e --arg p "$p" 'index($p) != null' > /dev/null 2>&1; then
+      mark="x"
+    else
+      mark=" "
+    fi
+    printf "  %2d) [%s] %s\n" "$n" "$mark" "$p"
+  done
+  echo ""
+  echo "Digite os numeros das impressoras a incluir (separados por espaco),"
+  if [ "$HAS_PRINTERS" = "1" ]; then
+    echo "ou enter direto para manter a selecao atual (marcadas com x):"
+  else
+    echo "ou 'all' para todas:"
+  fi
+  printf "Selecao: "
+  read -r SELECTION < /dev/tty
+
+  if [ -z "$SELECTION" ]; then
+    if [ "$HAS_PRINTERS" = "1" ]; then
+      echo ">> mantendo impressoras atuais"
+      PRINTERS_ARRAY="$CURRENT_PRINTERS_JSON"
+    else
+      echo "ERRO: nenhuma impressora selecionada." >&2
+      exit 1
+    fi
+  elif [ "$SELECTION" = "all" ] || [ "$SELECTION" = "ALL" ]; then
+    PRINTERS_ARRAY=$(printf '%s\n' "${LOCAL_PRINTERS[@]}" | jq -R . | jq -s .)
+  else
+    PICKED=()
+    for n in $SELECTION; do
+      if ! [[ "$n" =~ ^[0-9]+$ ]] || [ "$n" -lt 1 ] || [ "$n" -gt "${#LOCAL_PRINTERS[@]}" ]; then
+        echo "ERRO: numero invalido '$n' (use entre 1 e ${#LOCAL_PRINTERS[@]})." >&2
+        exit 1
+      fi
+      PICKED+=("${LOCAL_PRINTERS[$((n-1))]}")
+    done
+    PRINTERS_ARRAY=$(printf '%s\n' "${PICKED[@]}" | jq -R . | jq -s .)
+  fi
+
+  echo ""
+  echo "Impressoras selecionadas:"
+  echo "$PRINTERS_ARRAY" | jq -r '.[]' | sed 's/^/  - /'
+fi
 
 jq -n --arg key "$ABLY_KEY" --argjson printers "$PRINTERS_ARRAY" '{
   ably: { key: $key, channel: "printing" },
