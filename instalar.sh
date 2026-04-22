@@ -90,40 +90,61 @@ if [ "$CURRENT_PRINTERS_JSON" != "[]" ] && [ "$CURRENT_PRINTERS_JSON" != "null" 
   echo "Impressoras atuais:"
   echo "$CURRENT_PRINTERS_JSON" | jq -r '.[]' | sed 's/^/  - /'
   echo ""
-  echo "Cole o conteudo do printers.json do servidor para redetectar,"
-  echo "ou Ctrl+D direto para manter as atuais:"
+  echo "Alterar impressoras?"
+  echo "  [enter] = manter atuais"
+  echo "  j = colar printers.json do servidor e auto-detectar pelo hostname"
+  echo "  m = digitar nomes manualmente"
+  printf "Opcao: "
+  DEFAULT_OPT=""
 else
-  echo "Cole o conteudo do printers.json do servidor (Ctrl+D para terminar):"
+  echo "Configurar impressoras:"
+  echo "  j = colar printers.json do servidor e auto-detectar pelo hostname (padrao)"
+  echo "  m = digitar nomes manualmente"
+  printf "Opcao [j]: "
+  DEFAULT_OPT="j"
 fi
-echo "(no servidor: cat /opt/www/MGspa/laravel/printers.json)"
-PRINTERS_JSON_RAW=$(cat < /dev/tty)
+read -r OPT < /dev/tty
+OPT=${OPT:-$DEFAULT_OPT}
 
-if [ -z "$(echo "$PRINTERS_JSON_RAW" | tr -d '[:space:]')" ]; then
-  if [ "$HAS_PRINTERS" = "1" ]; then
+case "$OPT" in
+  "")
     echo ">> mantendo impressoras atuais"
     PRINTERS_ARRAY="$CURRENT_PRINTERS_JSON"
-  else
-    echo "ERRO: nenhuma impressora informada." >&2
-    exit 1
-  fi
-else
-  if ! echo "$PRINTERS_JSON_RAW" | jq empty 2>/dev/null; then
-    echo "ERRO: printers.json invalido (nao eh JSON)." >&2
-    exit 1
-  fi
+    ;;
+  j|J)
+    echo ""
+    echo "Cole o conteudo completo do printers.json e pressione Ctrl+D:"
+    echo "(no servidor: cat /opt/www/MGspa/laravel/printers.json)"
+    PRINTERS_JSON_RAW=$(cat < /dev/tty)
 
-  HOST=$(hostname -s)
-  HOST_STRIP=$(echo "$HOST" | sed 's/-ub$//')
-  echo ""
-  echo ">> hostname: $HOST  (procurando impressoras com '$HOST_STRIP')"
+    if ! echo "$PRINTERS_JSON_RAW" | jq empty 2>/dev/null; then
+      echo "ERRO: printers.json invalido (nao eh JSON)." >&2
+      exit 1
+    fi
 
-  SELECTED=$(echo "$PRINTERS_JSON_RAW" | jq -r --arg h "$HOST_STRIP" '
-    keys[] | select(contains($h))
-  ')
+    HOST=$(hostname -s)
+    HOST_STRIP=$(echo "$HOST" | sed 's/-ub$//')
+    echo ""
+    echo ">> hostname: $HOST  (procurando impressoras com '$HOST_STRIP')"
 
-  if [ -z "$SELECTED" ]; then
-    echo "Nao encontrei impressoras que batem com '$HOST_STRIP'."
-    echo "Digite os nomes manualmente, um por linha, termine com linha vazia:"
+    SELECTED=$(echo "$PRINTERS_JSON_RAW" | jq -r --arg h "$HOST_STRIP" '
+      keys[] | select(contains($h))
+    ')
+
+    if [ -z "$SELECTED" ]; then
+      echo "ERRO: nenhuma impressora no printers.json bate com '$HOST_STRIP'." >&2
+      echo "       re-rode o script e escolha 'm' para digitar manualmente." >&2
+      exit 1
+    fi
+
+    echo "Impressoras detectadas:"
+    echo "$SELECTED" | sed 's/^/  - /'
+    PRINTERS_ARRAY=$(echo "$SELECTED" | jq -R . | jq -s .)
+    ;;
+  m|M)
+    echo ""
+    echo "Digite os nomes das impressoras, um por linha."
+    echo "Termine com linha vazia (enter sem digitar nada):"
     PRINTERS_ARR=()
     while IFS= read -r line < /dev/tty; do
       [ -z "$line" ] && break
@@ -133,14 +154,13 @@ else
       echo "ERRO: nenhuma impressora informada." >&2
       exit 1
     fi
-    SELECTED=$(printf '%s\n' "${PRINTERS_ARR[@]}")
-  else
-    echo "Impressoras detectadas:"
-    echo "$SELECTED" | sed 's/^/  - /'
-  fi
-
-  PRINTERS_ARRAY=$(echo "$SELECTED" | jq -R . | jq -s .)
-fi
+    PRINTERS_ARRAY=$(printf '%s\n' "${PRINTERS_ARR[@]}" | jq -R . | jq -s .)
+    ;;
+  *)
+    echo "ERRO: opcao invalida '$OPT' (use j, m ou enter)." >&2
+    exit 1
+    ;;
+esac
 
 jq -n --arg key "$ABLY_KEY" --argjson printers "$PRINTERS_ARRAY" '{
   ably: { key: $key, channel: "printing" },

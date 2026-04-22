@@ -15,10 +15,12 @@ Código principal: [bin/index.js](bin/index.js).
 Em Ubuntu 24.04+ (exige Node >=16):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fabiomigliorini/MGprint/main/instalar.sh | bash
+curl -fsSL "https://raw.githubusercontent.com/fabiomigliorini/MGprint/main/instalar.sh?$(date +%s)" | bash
 ```
 
-O script instala as dependências (git, nodejs, npm, supervisor), clona o projeto em `/opt/MGprint`, roda `npm install`, configura o supervisor pra manter o serviço sempre rodando e reinicia tudo.
+O `?$(date +%s)` evita cache do `raw.githubusercontent.com` — garante que você sempre puxa a versão mais nova do script.
+
+O script instala as dependências (git, nodejs, npm, supervisor, jq), clona o projeto em `/opt/MGprint`, roda `npm install`, configura o supervisor pra manter o serviço sempre rodando e reinicia tudo.
 
 Na primeira execução ele cria `config.json` a partir do sample. **Edite antes do serviço funcionar**:
 
@@ -42,7 +44,7 @@ sudo tail -f /var/log/supervisor/MGprint.log
 O mesmo script é idempotente — se o projeto já existe, ele faz `git pull`, reinstala dependências e reinicia o supervisor:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fabiomigliorini/MGprint/main/instalar.sh | bash
+curl -fsSL "https://raw.githubusercontent.com/fabiomigliorini/MGprint/main/instalar.sh?$(date +%s)" | bash
 ```
 
 Ou localmente:
