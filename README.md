@@ -1,55 +1,60 @@
 # MGprint
 
-Instalação Dependências
+Servidor de impressão da MG Papelaria. Roda em cada computador que tem impressoras conectadas, escuta eventos de impressão do ERP via [Ably](https://ably.com/) e manda os PDFs pro CUPS.
 
-```
-sudo apt install git nodejs npm supervisor --yes
-```
+## Como funciona
 
-Baixar fontes do Github
-```
-cd /opt/
-sudo git clone https://github.com/fabiomigliorini/MGprint.git
-sudo chown usuario.usuario /opt/MGprint/ -R
-cd /opt/MGprint/
-npm install
-cp config.json.sample config.json
-```
+1. O ERP publica um evento no canal `printing` do Ably com o nome da impressora, URL do PDF, número de cópias e opções do `lp`.
+2. O MGprint, em cada máquina, está inscrito nos eventos das impressoras listadas em `config.json`.
+3. Ao receber um evento, baixa o PDF em `/tmp/` e executa `lp -d <impressora> <arquivo> -o <opcoes> -n <copias>`.
 
-Configurar Impressoras disponíveis e chave do Ably
-```
-vi config.json
+Código principal: [bin/index.js](bin/index.js).
+
+## Instalação
+
+Em Ubuntu 24.04+ (exige Node >=16):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fabiomigliorini/MGprint/main/instalar.sh | bash
 ```
 
-Configurar Supervisor para que esteja sempre rodando
-```
-sudo vi /etc/supervisor/conf.d/MGprint.conf
+O script instala as dependências (git, nodejs, npm, supervisor), clona o projeto em `/opt/MGprint`, roda `npm install`, configura o supervisor pra manter o serviço sempre rodando e reinicia tudo.
+
+Na primeira execução ele cria `config.json` a partir do sample. **Edite antes do serviço funcionar**:
+
+```bash
+sudo vi /opt/MGprint/config.json
 ```
 
-Conteudo MGprint.conf
-```
-[program:MGprint]
-directory=/opt/MGprint/
-user=usuario
-command=node .
-autostart=true
-autorestart=true
-stdout_logfile=/var/log/supervisor/MGprint.log
-redirect_stderr=true
-```
+Preencha:
+- `ably.key` — chave de API do Ably
+- `printers` — lista com os nomes das impressoras **exatamente como aparecem no CUPS**
 
-Reiniciar Supervisor
-```
-sudo service supervisor stop
-sudo service supervisor start
+Depois, reinicie:
+
+```bash
+sudo service supervisor restart
 sudo tail -f /var/log/supervisor/MGprint.log
 ```
 
-Atualizar
+## Atualização
+
+O mesmo script é idempotente — se o projeto já existe, ele faz `git pull`, reinstala dependências e reinicia o supervisor:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fabiomigliorini/MGprint/main/instalar.sh | bash
 ```
-cd /opt/MGprint
-git pull
-sudo service supervisor stop
-sudo service supervisor start
-sudo tail -f /var/log/supervisor/MGprint.log
+
+Ou localmente:
+
+```bash
+bash /opt/MGprint/instalar.sh
+```
+
+## Sincronia de nomes de impressora com o servidor
+
+Os nomes em `config.json` precisam bater com os do arquivo de impressoras do ERP, no servidor principal:
+
+```bash
+sudo vi /opt/www/MGspa/laravel/printers.json
 ```
