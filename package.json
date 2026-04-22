@@ -12,8 +12,8 @@
   "author": "Fabio Migliorini",
   "license": "ISC",
   "dependencies": {
-    "ably": "^1.2.15",
-    "axios": "^0.21.1",
+    "ably": "^2.6.0",
+    "axios": "^1.7.7",
     "boxen": "^4.0.0",
     "chalk": "^2.4.2"
   }
